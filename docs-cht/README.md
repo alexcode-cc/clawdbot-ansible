@@ -11,6 +11,7 @@
 | [安全機制分析](./security.md) | 多層防禦架構、UFW/DOCKER-USER/Fail2ban/Systemd 安全強化 |
 | [部署與安裝流程](./deployment.md) | 安裝腳本、部署流程、Release/Development 模式、CI/CD |
 | [開發指南](./development.md) | 如何修改本專案、新增任務、測試檢查清單、常見錯誤 |
+| [Mac Mini M4 部署指南](./mac-mini-m4-deployment.md) | Mac Mini M4 (Apple Silicon) 從零開始部署完整說明 |
 
 ## 快速導覽
 
