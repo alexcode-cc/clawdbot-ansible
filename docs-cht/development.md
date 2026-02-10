@@ -1,0 +1,523 @@
+# 開發指南
+
+本文件說明如何修改、擴展和維護 Clawdbot Ansible Installer 專案。
+
+---
+
+## 開發環境準備
+
+### 必要工具
+
+| 工具 | 版本 | 用途 |
+|------|------|------|
+| Ansible | 2.14+ | 執行 Playbook |
+| Python | 3.x | Ansible 依賴 |
+| Git | 最新版 | 版本控制 |
+| yamllint | 最新版 | YAML 格式檢查 |
+| ansible-lint | 最新版 | Ansible 最佳實踐檢查 |
+
+### 安裝開發工具
+
+```bash
+# 安裝 Ansible 與 lint 工具
+pip install ansible ansible-lint yamllint
+
+# 安裝 Ansible Galaxy 集合
+ansible-galaxy collection install -r requirements.yml
+```
+
+### 本機開發流程
+
+```bash
+# 1. 複製儲存庫
+git clone https://github.com/pasogott/clawdbot-ansible.git
+cd clawdbot-ansible
+
+# 2. 建立功能分支
+git checkout -b feature/my-feature
+
+# 3. 修改程式碼
+
+# 4. 執行檢查（見下方「測試檢查清單」）
+
+# 5. 提交變更
+git add .
+git commit -m "描述你的變更"
+
+# 6. 推送並建立 PR
+git push origin feature/my-feature
+```
+
+---
+
+## 程式碼風格
+
+### Ansible 任務撰寫規範
+
+#### 使用迴圈取代重複任務
+
+```yaml
+# ✅ 正確 — 使用 loop
+- name: Create directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ config_dir }}", mode: '0755' }
+    - { path: "{{ config_dir }}/sessions", mode: '0755' }
+    - { path: "{{ config_dir }}/credentials", mode: '0700' }
+
+# ❌ 錯誤 — 重複任務
+- name: Create config dir
+  ansible.builtin.file:
+    path: "{{ config_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Create sessions dir
+  ansible.builtin.file:
+    path: "{{ config_dir }}/sessions"
+    state: directory
+    mode: '0755'
+```
+
+#### 不使用 become_user
+
+本 Playbook 以 root 執行（`become: true`），不需要額外的 `become_user`。
+若需要以特定使用者執行，使用：
+
+```yaml
+- name: Install as clawdbot user
+  ansible.builtin.shell:
+    cmd: pnpm install -g clawdbot@latest
+  become: true
+  become_user: "{{ clawdbot_user }}"
+```
+
+#### 使用完整模組名稱（FQCN）
+
+```yaml
+# ✅ 正確
+- name: Install packages
+  ansible.builtin.apt:
+    name: vim
+    state: present
+
+# ❌ 錯誤
+- name: Install packages
+  apt:
+    name: vim
+    state: present
+```
+
+#### 使用 `community.docker.docker_compose_v2`
+
+```yaml
+# ✅ 正確 — V2 模組
+- name: Start containers
+  community.docker.docker_compose_v2:
+    project_src: /opt/clawdbot
+    state: present
+
+# ❌ 錯誤 — 已棄用的 V1 模組
+- name: Start containers
+  docker_compose:
+    project_src: /opt/clawdbot
+```
+
+#### docker compose 版本
+
+```yaml
+# ✅ 正確 — compose file 不需要 version 欄位
+services:
+  clawdbot:
+    image: clawdbot
+    ports:
+      - "127.0.0.1:3000:3000"
+
+# ❌ 錯誤 — version 欄位已棄用
+version: "3.8"
+services:
+  clawdbot:
+    ...
+```
+
+### Docker 設定規範
+
+#### 埠口綁定
+
+```yaml
+# ✅ 正確 — 僅 localhost
+ports:
+  - "127.0.0.1:3000:3000"
+
+# ❌ 錯誤 — 對外開放
+ports:
+  - "3000:3000"
+  - "0.0.0.0:3000:3000"
+```
+
+#### 非 Root 容器
+
+```dockerfile
+# ✅ 正確
+FROM node:22-slim
+RUN useradd -m clawdbot
+USER clawdbot
+CMD ["node", "server.js"]
+
+# ❌ 錯誤 — 以 root 執行
+FROM node:22-slim
+CMD ["node", "server.js"]
+```
+
+### Templates（Jinja2 範本）
+
+- 使用變數取代硬編碼值
+- 加入註解說明安全設計決策
+- 保持 Jinja2 邏輯簡單
+
+```jinja2
+{# ✅ 正確 — 使用變數 + 註解 #}
+# Docker daemon configuration
+# iptables must be true for DOCKER-USER chain to work
+{
+  "iptables": true,
+  "log-opts": {
+    "max-size": "{{ docker_log_max_size | default('10m') }}"
+  }
+}
+
+{# ❌ 錯誤 — 硬編碼 + 無註解 #}
+{
+  "iptables": true,
+  "log-opts": {
+    "max-size": "10m"
+  }
+}
+```
+
+---
+
+## 新增任務
+
+### 新增一個新的任務檔案
+
+1. **建立任務檔案**
+
+   如果任務需要區分 OS，建立三個檔案：
+   ```
+   roles/clawdbot/tasks/
+   ├── my-feature.yml           # 調度器
+   ├── my-feature-linux.yml     # Linux 實作
+   └── my-feature-macos.yml     # macOS 實作
+   ```
+
+2. **撰寫調度器（OS 分流）**
+
+   ```yaml
+   # my-feature.yml
+   ---
+   - name: Include Linux my-feature
+     ansible.builtin.include_tasks: my-feature-linux.yml
+     when: ansible_os_family == 'Debian'
+
+   - name: Include macOS my-feature
+     ansible.builtin.include_tasks: my-feature-macos.yml
+     when: ansible_os_family == 'Darwin'
+   ```
+
+3. **更新 main.yml**
+
+   在 `roles/clawdbot/tasks/main.yml` 中加入：
+   ```yaml
+   - name: Include my-feature tasks
+     ansible.builtin.include_tasks: my-feature.yml
+   ```
+
+   **注意順序**：確保新任務放在正確的位置。參考現有順序：
+   ```
+   system-tools → tailscale → user → docker → firewall → nodejs → clawdbot
+   ```
+
+4. **使用 `--check` 測試**
+
+   ```bash
+   ansible-playbook playbook.yml --check
+   ```
+
+5. **驗證冪等性**
+
+   連續執行兩次，第二次不應有 `changed` 狀態的任務。
+
+### 新增變數
+
+在 `roles/clawdbot/defaults/main.yml` 中定義：
+
+```yaml
+# 新功能設定
+my_feature_enabled: true
+my_feature_port: 8080
+```
+
+在任務中使用：
+
+```yaml
+- name: Configure my feature
+  ansible.builtin.template:
+    src: my-feature.conf.j2
+    dest: /etc/my-feature.conf
+  when: my_feature_enabled
+```
+
+### 新增 Handler
+
+在 `roles/clawdbot/handlers/main.yml` 中新增：
+
+```yaml
+- name: Restart my-service
+  ansible.builtin.systemd:
+    name: my-service
+    state: restarted
+```
+
+在任務中使用 `notify` 觸發：
+
+```yaml
+- name: Update config
+  ansible.builtin.template:
+    src: my-config.j2
+    dest: /etc/my-config.conf
+  notify: Restart my-service
+```
+
+### 新增 Template
+
+在 `roles/clawdbot/templates/` 中建立 `.j2` 檔案：
+
+```jinja2
+# my-config.conf.j2
+# Generated by Ansible - Do not edit manually
+# Reason: {{ ansible_managed }}
+
+port={{ my_feature_port }}
+enabled={{ my_feature_enabled | lower }}
+```
+
+---
+
+## 修改防火牆規則
+
+### 安全注意事項
+
+**在修改防火牆規則前，務必：**
+
+1. 在一次性 VM 上測試
+2. 確保 SSH 始終可存取
+3. 更新 `docs/security.md` 與 `docs-cht/security.md`
+4. 用外部埠掃描驗證
+
+### 新增 UFW 規則
+
+```yaml
+# 在 firewall-linux.yml 中新增
+- name: Allow custom port
+  community.general.ufw:
+    rule: allow
+    port: '8080'
+    proto: tcp
+    comment: 'My custom service'
+```
+
+### 修改 DOCKER-USER 鏈
+
+編輯 `firewall-linux.yml` 中的 `blockinfile` 區塊。
+**切勿移除 RELATED/ESTABLISHED 規則**，否則容器將無法回應已建立的連線。
+
+---
+
+## 修改 Docker 設定
+
+### daemon.json 變更
+
+修改 `roles/clawdbot/templates/daemon.json.j2`。
+
+**重要**：
+- 此檔案的變更會觸發 `Restart docker` handler
+- Docker 重啟後需要驗證容器網路正常
+- 驗證 DOCKER-USER 鏈仍在運作
+
+### 絕對不可做的事
+
+1. **不可設定 `"iptables": false`**：會破壞容器網路
+2. **不可移除 `"live-restore": true`**：會在 daemon 重啟時停止所有容器
+3. **不可啟用 `"ip6tables": true`**：除非你已配置 IPv6 防火牆規則
+
+---
+
+## 測試檢查清單
+
+### 提交前必做
+
+```bash
+# 1. YAML 語法檢查
+yamllint .
+
+# 2. Ansible lint 檢查
+ansible-lint playbook.yml
+
+# 3. Ansible 語法檢查
+ansible-playbook playbook.yml --syntax-check
+
+# 4. 乾跑測試
+ansible-playbook playbook.yml --check
+```
+
+### 在測試 VM 上執行
+
+```bash
+# 5. 完整安裝
+curl -fsSL https://raw.githubusercontent.com/.../install.sh | bash
+
+# 6. 驗證安全設定
+sudo ufw status verbose
+sudo iptables -L DOCKER-USER -n
+sudo ss -tlnp  # 僅 SSH + localhost 應該監聽
+
+# 7. 外部埠掃描
+nmap -p- TEST_SERVER_IP  # 僅 22 埠應該開啟
+
+# 8. 測試 Docker 隔離
+sudo docker run -p 80:80 nginx
+curl http://TEST_SERVER_IP:80   # 應該失敗
+curl http://localhost:80         # 應該成功
+
+# 9. 冪等性驗證
+# 再次執行 playbook，不應有非預期的 changed 任務
+ansible-playbook playbook.yml --ask-become-pass
+```
+
+---
+
+## 常見錯誤與避免方式
+
+| 編號 | 錯誤 | 正確做法 |
+|------|------|---------|
+| 1 | 在 Docker 之前配置防火牆 | Docker 必須先安裝，防火牆後配置 |
+| 2 | 使用 `0.0.0.0` 埠口綁定 | 始終使用 `127.0.0.1:HOST:CONTAINER` |
+| 3 | 硬編碼網路介面名稱 | 使用動態偵測（`ip route`） |
+| 4 | 在 daemon.json 設定 `iptables: false` | 保持 `true`，使用 DOCKER-USER 控制 |
+| 5 | 以 root 身份執行容器 | 使用 USER 指令指定非特權使用者 |
+| 6 | 使用棄用的 `docker-compose` V1 | 使用 `docker compose` V2 |
+| 7 | 忘記更新 `requirements.yml` | 新增集合時同步更新 |
+| 8 | 在 compose file 中加入 `version:` | 已棄用，直接從 `services:` 開始 |
+| 9 | 提交敏感資料到 Git | 使用環境變數或 Ansible Vault |
+| 10 | 跳過冪等性驗證 | 任務應能安全重複執行 |
+
+---
+
+## 專案關鍵檔案快速參考
+
+### 修改頻率高的檔案
+
+| 檔案 | 修改場景 |
+|------|---------|
+| `roles/clawdbot/tasks/*.yml` | 新增/修改安裝步驟 |
+| `roles/clawdbot/defaults/main.yml` | 新增/修改變數 |
+| `roles/clawdbot/templates/*.j2` | 修改設定檔範本 |
+| `roles/clawdbot/handlers/main.yml` | 新增服務重啟觸發 |
+| `playbook.yml` | 修改前置/後續作業 |
+
+### 較少修改的檔案
+
+| 檔案 | 修改場景 |
+|------|---------|
+| `install.sh` | 修改安裝入口邏輯 |
+| `run-playbook.sh` | 修改 Playbook 執行方式 |
+| `requirements.yml` | 新增 Ansible 集合依賴 |
+| `.github/workflows/lint.yml` | 修改 CI/CD 流程 |
+| `.ansible-lint` / `.yamllint` | 調整 lint 規則 |
+
+---
+
+## 分支策略
+
+| 分支 | 用途 |
+|------|------|
+| `main` | 穩定版本，正式發布 |
+| `development` | 開發整合分支 |
+| `feature/*` | 功能開發分支 |
+| `fix/*` | 修復分支 |
+
+---
+
+## 版本管理
+
+- 使用語意化版本（Semantic Versioning）
+- 透過 Git tag 標記版本
+- 更新 `CHANGELOG.md` 記錄使用者可見的變更
+- 程式碼中不硬編碼版本號
+
+---
+
+## 文件維護
+
+### 使用者面向文件
+
+| 文件 | 位置 | 說明 |
+|------|------|------|
+| README.md | 專案根目錄 | 安裝說明、快速開始 |
+| docs/ | 英文技術文件 | 架構、安全、疑難排解 |
+| docs-cht/ | 繁體中文技術文件 | 深入技術分析 |
+
+### 開發者面向文件
+
+| 文件 | 位置 | 說明 |
+|------|------|------|
+| AGENTS.md | 專案根目錄 | AI Agent 與開發者指南 |
+| 程式碼註解 | 各任務檔案中 | 說明「為什麼」而非「做什麼」 |
+
+### 文件更新原則
+
+- 修改功能時同步更新相關文件
+- 保持文件簡潔，避免冗長的進度日誌
+- 使用實際的程式碼範例而非抽象描述
+
+---
+
+## 架構決策記錄
+
+以下是本專案的重要設計決策及其理由：
+
+### 為什麼使用 Ansible 而非 Shell Script？
+
+- **冪等性**：Ansible 任務可以安全重複執行
+- **跨平台**：Ansible 模組抽象化了 OS 差異
+- **可讀性**：YAML 格式比 Shell 更容易閱讀和維護
+- **錯誤處理**：Ansible 提供內建的錯誤處理和回報機制
+
+### 為什麼在 localhost 執行而非遠端？
+
+- **簡化架構**：不需要設定 SSH 金鑰和 inventory
+- **一鍵安裝**：`curl | bash` 模式需要在目標機器上直接執行
+- **降低風險**：不需要在遠端機器上開放 Ansible 存取
+
+### 為什麼使用 pnpm 而非 npm？
+
+- **磁碟效率**：pnpm 使用硬連結，節省磁碟空間
+- **安裝速度**：pnpm 的依賴解析更快
+- **嚴格依賴**：pnpm 預設使用嚴格的 node_modules 結構
+
+### 為什麼安裝後不自動配置 Clawdbot？
+
+v2.0.0 的設計決策：
+- Clawdbot 的設定需要使用者互動（選擇提供者、輸入 API key 等）
+- 由 `clawdbot onboard --install-daemon` 統一處理，而非 Ansible
+- 這分離了「基礎設施準備」和「應用配置」兩個層次
+
+### 為什麼使用 Homebrew（包括在 Linux 上）？
+
+- **統一工具鏈**：Linux 和 macOS 使用相同的套件管理工具
+- **使用者空間安裝**：Homebrew 安裝在使用者空間，不影響系統套件
+- **最新版本**：Homebrew 通常提供比系統套件庫更新的版本
