@@ -1,24 +1,34 @@
-# Clawdbot Ansible Installer
+# OpenClaw Ansible Installer
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Lint](https://github.com/pasogott/clawdbot-ansible/actions/workflows/lint.yml/badge.svg)](https://github.com/pasogott/clawdbot-ansible/actions/workflows/lint.yml)
+[![Lint](https://github.com/openclaw/openclaw-ansible/actions/workflows/lint.yml/badge.svg)](https://github.com/openclaw/openclaw-ansible/actions/workflows/lint.yml)
 [![Ansible](https://img.shields.io/badge/Ansible-2.14+-blue.svg)](https://www.ansible.com/)
-[![Multi-OS](https://img.shields.io/badge/OS-Debian%20%7C%20Ubuntu%20%7C%20macOS-orange.svg)](https://www.debian.org/)
+[![Multi-OS](https://img.shields.io/badge/OS-Debian%20%7C%20Ubuntu-orange.svg)](https://www.debian.org/)
 
-Automated, hardened installation of [Clawdbot](https://github.com/clawdbot/clawdbot) with Docker, Homebrew, and Tailscale VPN support for Linux and macOS.
+Automated, hardened installation of [OpenClaw](https://github.com/openclaw/openclaw) with Docker and Tailscale VPN support for Debian/Ubuntu Linux.
+
+## ⚠️ macOS Support: Deprecated & Disabled
+
+**Effective 2026-02-06, support for bare-metal macOS installations has been removed from this playbook.**
+
+### Why?
+The underlying project currently requires system-level permissions and configurations that introduce significant security risks when executed on a primary host OS. To protect user data and system integrity, we have disabled bare-metal execution.
+
+### What does this mean?
+* The playbook will now explicitly fail if run on a `Darwin` (macOS) system.
+* We strongly discourage manual workarounds to bypass this check.
+* **Future Support:** We are evaluating a virtualization-first strategy (using Vagrant or Docker) to provide a sandboxed environment for this project in the future.
 
 ## Features
 
-- 🔒 **Firewall-first**: UFW (Linux) + Application Firewall (macOS) + Docker isolation
+- 🔒 **Firewall-first**: UFW firewall + Docker isolation
 - 🛡️ **Fail2ban**: SSH brute-force protection out of the box
 - 🔄 **Auto-updates**: Automatic security patches via unattended-upgrades
 - 🔐 **Tailscale VPN**: Secure remote access without exposing services
-- 🍺 **Homebrew**: Package manager for both Linux and macOS
-- 🐳 **Docker**: Docker CE (Linux) / Docker Desktop (macOS)
-- 🌐 **Multi-OS Support**: Debian, Ubuntu, and macOS
+- 🐳 **Docker**: Docker CE with security hardening
 - 🚀 **One-command install**: Complete setup in minutes
 - 🔧 **Auto-configuration**: DBus, systemd, environment setup
-- 📦 **pnpm installation**: Uses `pnpm install -g clawdbot@latest`
+- 📦 **pnpm installation**: Uses `pnpm install -g openclaw@latest`
 
 ## Quick Start
 
@@ -27,7 +37,7 @@ Automated, hardened installation of [Clawdbot](https://github.com/clawdbot/clawd
 Install the latest stable version from npm:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pasogott/clawdbot-ansible/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/openclaw/openclaw-ansible/main/install.sh | bash
 ```
 
 ### Development Mode
@@ -36,11 +46,11 @@ Install from source for development or testing:
 
 ```bash
 # Clone the installer
-git clone https://github.com/pasogott/clawdbot-ansible.git
-cd clawdbot-ansible
+git clone https://github.com/openclaw/openclaw-ansible.git
+cd openclaw-ansible
 
 # Install in development mode
-ansible-playbook playbook.yml --ask-become-pass -e clawdbot_install_mode=development
+ansible-playbook playbook.yml --ask-become-pass -e openclaw_install_mode=development
 ```
 
 ## What Gets Installed
@@ -49,21 +59,21 @@ ansible-playbook playbook.yml --ask-become-pass -e clawdbot_install_mode=develop
 - UFW firewall (SSH + Tailscale ports only)
 - Docker CE + Compose V2 (for sandboxes)
 - Node.js 22.x + pnpm
-- Clawdbot on host (not containerized)
+- OpenClaw on host (not containerized)
 - Systemd service (auto-start)
 
 ## Post-Install
 
-After installation completes, switch to the clawdbot user:
+After installation completes, switch to the openclaw user:
 
 ```bash
-sudo su - clawdbot
+sudo su - openclaw
 ```
 
 Then run the quick-start onboarding wizard:
 
 ```bash
-clawdbot onboard --install-daemon
+openclaw onboard --install-daemon
 ```
 
 This will:
@@ -75,42 +85,42 @@ This will:
 
 ```bash
 # Configure manually
-clawdbot configure
+openclaw configure
 
 # Login to provider
-clawdbot providers login
+openclaw providers login
 
 # Test gateway
-clawdbot gateway
+openclaw gateway
 
 # Install as daemon
-clawdbot daemon install
-clawdbot daemon start
+openclaw daemon install
+openclaw daemon start
 
 # Check status
-clawdbot status
-clawdbot logs
+openclaw status
+openclaw logs
 ```
 
 ## Installation Modes
 
 ### Release Mode (Default)
-- Installs via `pnpm install -g clawdbot@latest`
+- Installs via `pnpm install -g openclaw@latest`
 - Gets latest stable version from npm registry
-- Automatic updates via `pnpm install -g clawdbot@latest`
+- Automatic updates via `pnpm install -g openclaw@latest`
 - **Recommended for production**
 
 ### Development Mode
-- Clones from `https://github.com/clawdbot/clawdbot.git`
+- Clones from `https://github.com/openclaw/openclaw.git`
 - Builds from source with `pnpm build`
-- Symlinks binary to `~/.local/bin/clawdbot`
+- Symlinks binary to `~/.local/bin/openclaw`
 - Adds helpful aliases:
-  - `clawdbot-rebuild` - Rebuild after code changes
-  - `clawdbot-dev` - Navigate to repo directory
-  - `clawdbot-pull` - Pull, install deps, and rebuild
+  - `openclaw-rebuild` - Rebuild after code changes
+  - `openclaw-dev` - Navigate to repo directory
+  - `openclaw-pull` - Pull, install deps, and rebuild
 - **Recommended for development and testing**
 
-Enable with: `-e clawdbot_install_mode=development`
+Enable with: `-e openclaw_install_mode=development`
 
 ## Security
 
@@ -118,7 +128,7 @@ Enable with: `-e clawdbot_install_mode=development`
 - **Fail2ban**: SSH brute-force protection (5 attempts → 1 hour ban)
 - **Automatic updates**: Security patches via unattended-upgrades
 - **Docker isolation**: Containers can't expose ports externally (DOCKER-USER chain)
-- **Non-root**: Clawdbot runs as unprivileged user
+- **Non-root**: OpenClaw runs as unprivileged user
 - **Scoped sudo**: Limited to service management (not full root)
 - **Systemd hardening**: NoNewPrivileges, PrivateTmp, ProtectSystem
 
@@ -129,8 +139,8 @@ Verify: `nmap -p- YOUR_SERVER_IP` should show only port 22 open.
 For high-security environments, audit before running:
 
 ```bash
-git clone https://github.com/openclaw/clawdbot-ansible.git
-cd clawdbot-ansible
+git clone https://github.com/openclaw/openclaw-ansible.git
+cd openclaw-ansible
 # Review playbook.yml and roles/
 ansible-playbook playbook.yml --check --diff  # Dry run
 ansible-playbook playbook.yml --ask-become-pass
@@ -147,36 +157,18 @@ ansible-playbook playbook.yml --ask-become-pass
 
 ## Requirements
 
-### Linux (Debian/Ubuntu)
 - Debian 11+ or Ubuntu 20.04+
 - Root/sudo access
 - Internet connection
 
-### macOS
-- macOS 11 (Big Sur) or later
-- Homebrew will be installed automatically
-- Admin/sudo access
-- Internet connection
-
 ## What Gets Installed
 
-### Common (All OS)
-- Homebrew package manager
+- Tailscale (mesh VPN)
+- UFW firewall (SSH + Tailscale ports only)
+- Docker CE + Compose V2 (for sandboxes)
 - Node.js 22.x + pnpm
-- Clawdbot via `pnpm install -g clawdbot@latest`
-- Essential development tools
-- Git, zsh, oh-my-zsh
-
-### Linux-Specific
-- Docker CE + Compose V2
-- UFW firewall (configured)
-- Tailscale VPN
-- systemd service
-
-### macOS-Specific
-- Docker Desktop (via Homebrew Cask)
-- Application Firewall
-- Tailscale app
+- OpenClaw on host (not containerized)
+- Systemd service (auto-start)
 
 ## Manual Installation
 
@@ -187,8 +179,8 @@ ansible-playbook playbook.yml --ask-become-pass
 sudo apt update && sudo apt install -y ansible git
 
 # Clone repository
-git clone https://github.com/pasogott/clawdbot-ansible.git
-cd clawdbot-ansible
+git clone https://github.com/openclaw/openclaw-ansible.git
+cd openclaw-ansible
 
 # Install Ansible collections
 ansible-galaxy collection install -r requirements.yml
@@ -203,21 +195,21 @@ Build from source for development:
 
 ```bash
 # Same as above, but with development mode flag
-./run-playbook.sh -e clawdbot_install_mode=development
+./run-playbook.sh -e openclaw_install_mode=development
 
 # Or directly:
-ansible-playbook playbook.yml --ask-become-pass -e clawdbot_install_mode=development
+ansible-playbook playbook.yml --ask-become-pass -e openclaw_install_mode=development
 ```
 
 This will:
-- Clone clawdbot repo to `~/code/clawdbot`
+- Clone openclaw repo to `~/code/openclaw`
 - Run `pnpm install` and `pnpm build`
-- Symlink binary to `~/.local/bin/clawdbot`
+- Symlink binary to `~/.local/bin/openclaw`
 - Add development aliases to `.bashrc`
 
 ## Configuration Options
 
-All configuration variables can be found in [`roles/clawdbot/defaults/main.yml`](roles/clawdbot/defaults/main.yml).
+All configuration variables can be found in [`roles/openclaw/defaults/main.yml`](roles/openclaw/defaults/main.yml).
 
 You can override them in three ways:
 
@@ -225,8 +217,8 @@ You can override them in three ways:
 
 ```bash
 ansible-playbook playbook.yml --ask-become-pass \
-  -e clawdbot_install_mode=development \
-  -e "clawdbot_ssh_keys=['ssh-ed25519 AAAAC3... user@host']"
+  -e openclaw_install_mode=development \
+  -e "openclaw_ssh_keys=['ssh-ed25519 AAAAC3... user@host']"
 ```
 
 ### 2. Via Variables File
@@ -234,12 +226,12 @@ ansible-playbook playbook.yml --ask-become-pass \
 ```bash
 # Create vars.yml
 cat > vars.yml << EOF
-clawdbot_install_mode: development
-clawdbot_ssh_keys:
+openclaw_install_mode: development
+openclaw_ssh_keys:
   - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGxxxxxxxx user@host"
   - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAB... user@host"
-clawdbot_repo_url: "https://github.com/YOUR_USERNAME/clawdbot.git"
-clawdbot_repo_branch: "feature-branch"
+openclaw_repo_url: "https://github.com/YOUR_USERNAME/openclaw.git"
+openclaw_repo_branch: "feature-branch"
 tailscale_authkey: "tskey-auth-xxxxxxxxxxxxx"
 EOF
 
@@ -249,22 +241,22 @@ ansible-playbook playbook.yml --ask-become-pass -e @vars.yml
 
 ### 3. Edit Defaults Directly
 
-Edit `roles/clawdbot/defaults/main.yml` before running the playbook.
+Edit `roles/openclaw/defaults/main.yml` before running the playbook.
 
 ### Available Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `clawdbot_user` | `clawdbot` | System user name |
-| `clawdbot_home` | `/home/clawdbot` | User home directory |
-| `clawdbot_install_mode` | `release` | `release` or `development` |
-| `clawdbot_ssh_keys` | `[]` | List of SSH public keys |
-| `clawdbot_repo_url` | `https://github.com/clawdbot/clawdbot.git` | Git repository (dev mode) |
-| `clawdbot_repo_branch` | `main` | Git branch (dev mode) |
+| `openclaw_user` | `openclaw` | System user name |
+| `openclaw_home` | `/home/openclaw` | User home directory |
+| `openclaw_install_mode` | `release` | `release` or `development` |
+| `openclaw_ssh_keys` | `[]` | List of SSH public keys |
+| `openclaw_repo_url` | `https://github.com/openclaw/openclaw.git` | Git repository (dev mode) |
+| `openclaw_repo_branch` | `main` | Git branch (dev mode) |
 | `tailscale_authkey` | `""` | Tailscale auth key for auto-connect |
 | `nodejs_version` | `22.x` | Node.js version to install |
 
-See [`roles/clawdbot/defaults/main.yml`](roles/clawdbot/defaults/main.yml) for the complete list.
+See [`roles/openclaw/defaults/main.yml`](roles/openclaw/defaults/main.yml) for the complete list.
 
 ### Common Configuration Examples
 
@@ -272,16 +264,16 @@ See [`roles/clawdbot/defaults/main.yml`](roles/clawdbot/defaults/main.yml) for t
 
 ```bash
 ansible-playbook playbook.yml --ask-become-pass \
-  -e "clawdbot_ssh_keys=['ssh-ed25519 AAAAC3... user@host']"
+  -e "openclaw_ssh_keys=['ssh-ed25519 AAAAC3... user@host']"
 ```
 
 #### Development Mode with Custom Repository
 
 ```bash
 ansible-playbook playbook.yml --ask-become-pass \
-  -e clawdbot_install_mode=development \
-  -e clawdbot_repo_url=https://github.com/YOUR_USERNAME/clawdbot.git \
-  -e clawdbot_repo_branch=feature-branch
+  -e openclaw_install_mode=development \
+  -e openclaw_repo_url=https://github.com/YOUR_USERNAME/openclaw.git \
+  -e openclaw_repo_branch=feature-branch
 ```
 
 #### Tailscale Auto-Connect
@@ -297,5 +289,5 @@ MIT - see [LICENSE](LICENSE)
 
 ## Support
 
-- Clawdbot: https://github.com/clawdbot/clawdbot
-- This installer: https://github.com/pasogott/clawdbot-ansible/issues
+- OpenClaw: https://github.com/openclaw/openclaw
+- This installer: https://github.com/openclaw/openclaw-ansible/issues
