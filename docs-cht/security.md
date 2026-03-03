@@ -15,13 +15,13 @@
 ├───────────────────────────────────────────────────────┤
 │ 第 4 層：Localhost 綁定（容器埠口僅綁定 127.0.0.1）    │
 ├───────────────────────────────────────────────────────┤
-│ 第 5 層：非 Root 容器（以 clawdbot 使用者執行）         │
+│ 第 5 層：非 Root 容器（以 openclaw 使用者執行）         │
 ├───────────────────────────────────────────────────────┤
 │ 第 6 層：Systemd 安全強化                              │
 │（NoNewPrivileges、PrivateTmp、ProtectSystem）          │
 ├───────────────────────────────────────────────────────┤
 │ 第 7 層：範圍限定 Sudo 權限                            │
-│（僅允許管理 clawdbot 服務與 Tailscale）                │
+│（僅允許管理 openclaw 服務與 Tailscale）                │
 ├───────────────────────────────────────────────────────┤
 │ 第 8 層：自動安全更新（unattended-upgrades）           │
 └───────────────────────────────────────────────────────┘
@@ -33,7 +33,7 @@
 
 ### 實作位置
 
-`roles/clawdbot/tasks/firewall-linux.yml`
+`roles/openclaw/tasks/firewall-linux.yml`
 
 ### 規則設定
 
@@ -83,7 +83,7 @@ sudo ufw status verbose
 
 ### 實作位置
 
-`roles/clawdbot/tasks/firewall-linux.yml`
+`roles/openclaw/tasks/firewall-linux.yml`
 
 ### 設定
 
@@ -138,7 +138,7 @@ sudo fail2ban-client set sshd unbanip <IP_ADDRESS>
 
 ### 實作位置
 
-`roles/clawdbot/tasks/firewall-linux.yml` → 寫入 `/etc/ufw/after.rules`
+`roles/openclaw/tasks/firewall-linux.yml` → 寫入 `/etc/ufw/after.rules`
 
 ### 規則內容
 
@@ -233,7 +233,7 @@ ports:
    ```bash
    # 在伺服器上連線 Tailscale
    sudo tailscale up
-   # 從你的裝置透過 Tailscale IP 存取
+   # 從你的裝置透過 Tailscale IP 存取（需搭配 SSH tunnel）
    ```
 
 ---
@@ -242,13 +242,13 @@ ports:
 
 ### 設計原則
 
-- 建立 `clawdbot` 系統使用者（非特權）
-- Clawdbot 進程以 `clawdbot` 使用者身份執行
+- 建立 `openclaw` 系統使用者（非特權）
+- OpenClaw 進程以 `openclaw` 使用者身份執行
 - 容器內的進程也以非 root 身份執行
 
 ### 為什麼不用 Root？
 
-**最小權限原則**。如果容器或應用程式被攻破，攻擊者只擁有 `clawdbot` 使用者的權限，無法：
+**最小權限原則**。如果容器或應用程式被攻破，攻擊者只擁有 `openclaw` 使用者的權限，無法：
 - 修改系統檔案
 - 存取其他使用者的資料
 - 安裝惡意軟體到系統目錄
@@ -260,7 +260,7 @@ ports:
 
 ### 實作位置
 
-`roles/clawdbot/templates/clawdbot-host.service.j2`
+`roles/openclaw/templates/openclaw-host.service.j2`
 
 ### 安全指令
 
@@ -270,16 +270,16 @@ ports:
 | `PrivateTmp=true` | 使用獨立的 /tmp 目錄，防止 tmp 注入攻擊 |
 | `ProtectSystem=strict` | 將 /usr、/boot、/efi 掛載為唯讀 |
 | `ProtectHome=read-only` | 將所有使用者的家目錄掛載為唯讀 |
-| `ReadWritePaths=~/.clawdbot` | 明確允許寫入設定目錄 |
+| `ReadWritePaths=~/.openclaw` | 明確允許寫入設定目錄 |
 | `ReadWritePaths=~/.local` | 明確允許寫入本地資料目錄 |
 
 ### 效果
 
-即使 Clawdbot 進程被攻破，攻擊者：
+即使 OpenClaw 進程被攻破，攻擊者：
 - 無法提升權限（NoNewPrivileges）
 - 無法存取其他進程的暫存檔（PrivateTmp）
 - 無法修改系統二進位檔（ProtectSystem）
-- 只能寫入 `~/.clawdbot` 和 `~/.local` 目錄
+- 只能寫入 `~/.openclaw` 和 `~/.local` 目錄
 
 ---
 
@@ -287,13 +287,13 @@ ports:
 
 ### 實作位置
 
-`roles/clawdbot/tasks/user.yml` → `/etc/sudoers.d/clawdbot`
+`roles/openclaw/tasks/user.yml` → `/etc/sudoers.d/openclaw`
 
 ### 允許的指令
 
 ```
-# 服務控制 — 僅限 clawdbot 服務
-systemctl start/stop/restart/status/enable/disable clawdbot
+# 服務控制 — 僅限 openclaw 服務
+systemctl start/stop/restart/status/enable/disable openclaw
 systemctl daemon-reload
 
 # Tailscale — 診斷 + 連線/斷線
@@ -302,13 +302,13 @@ tailscale up *
 tailscale down
 tailscale ip/version/ping/whois
 
-# 日誌存取 — 僅限 clawdbot 日誌
-journalctl -u clawdbot *
+# 日誌存取 — 僅限 openclaw 日誌
+journalctl -u openclaw *
 ```
 
 ### 未授權的操作
 
-clawdbot 使用者**無法**：
+openclaw 使用者**無法**：
 - `sudo apt install` — 安裝系統套件
 - `sudo ufw` — 修改防火牆規則
 - `sudo systemctl restart docker` — 管理 Docker 服務
@@ -317,7 +317,7 @@ clawdbot 使用者**無法**：
 
 ### 為什麼要限制 Sudo？
 
-如果 clawdbot 擁有完整的 root 權限，一旦應用程式被攻破，攻擊者就能接管整台伺服器。範圍限定的 sudo 將損害控制在最小範圍內。
+如果 openclaw 擁有完整的 root 權限，一旦應用程式被攻破，攻擊者就能接管整台伺服器。範圍限定的 sudo 將損害控制在最小範圍內。
 
 ---
 
@@ -325,7 +325,7 @@ clawdbot 使用者**無法**：
 
 ### 實作位置
 
-`roles/clawdbot/tasks/firewall-linux.yml`
+`roles/openclaw/tasks/firewall-linux.yml`
 
 ### 設定
 
@@ -362,7 +362,7 @@ Automatic-Reboot "false";
 
 ### 設定檔
 
-`roles/clawdbot/templates/daemon.json.j2` → `/etc/docker/daemon.json`
+`roles/openclaw/templates/daemon.json.j2` → `/etc/docker/daemon.json`
 
 | 設定 | 值 | 說明 |
 |------|-----|------|
@@ -384,7 +384,7 @@ Automatic-Reboot "false";
 Tailscale 提供安全的遠端存取管道，無需將任何服務埠口暴露在公網上：
 
 ```
-你的裝置 ──(Tailscale VPN)──→ 伺服器 ──(localhost)──→ Clawdbot:3000
+你的裝置 ──(Tailscale VPN)──→ 伺服器 ──(SSH tunnel)──→ OpenClaw:3000
 ```
 
 ### 與防火牆的整合
@@ -396,22 +396,6 @@ UFW 僅允許 Tailscale 的 UDP 41641 埠，Tailscale 使用 WireGuard 協定進
 1. 使用 **臨時金鑰（ephemeral keys）** 而非永久金鑰
 2. 在 Tailscale 管理介面設定 **ACL 規則**，限制哪些裝置可以存取
 3. 不要將 auth key 提交到 Git 儲存庫
-
----
-
-## macOS 安全限制
-
-macOS 的安全機制較為有限：
-
-| 功能 | Linux | macOS |
-|------|-------|-------|
-| UFW 防火牆 | ✅ 完整配置 | ❌（使用 Application Firewall） |
-| DOCKER-USER 鏈 | ✅ | ❌（Docker Desktop 自行管理） |
-| Fail2ban | ✅ | ❌ 不可用 |
-| unattended-upgrades | ✅ | ❌ 不可用 |
-| Systemd 安全強化 | ✅ | ❌（無 systemd） |
-
-**建議**：macOS 適合用於開發環境，正式部署應使用 Linux。
 
 ---
 
@@ -476,6 +460,11 @@ sudo ss -tlnp
 
 1. **`curl | bash` 安裝模式**：本質上存在風險，建議高安全環境先審計程式碼
 2. **IPv6 已停用**：如果網路使用 IPv6，需要額外檢視防火牆規則
-3. **macOS 支援不完整**：缺少 Fail2ban、unattended-upgrades、systemd 強化等
-4. **自動重啟已關閉**：安全更新後可能需要手動重啟
-5. **密碼登入未禁用**：本 Playbook 未自動禁用 SSH 密碼登入（建議手動設定）
+3. **自動重啟已關閉**：安全更新後可能需要手動重啟
+4. **密碼登入未禁用**：本 Playbook 未自動禁用 SSH 密碼登入（建議手動設定）
+
+## 回報安全問題
+
+如果你發現安全漏洞，請私下回報：
+- OpenClaw：https://github.com/openclaw/openclaw/security
+- 本安裝器：https://github.com/openclaw/openclaw-ansible/security

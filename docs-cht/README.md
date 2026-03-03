@@ -1,6 +1,6 @@
-# Clawdbot Ansible 安裝器 — 專案技術文件（繁體中文）
+# OpenClaw Ansible 安裝器 — 專案技術文件（繁體中文）
 
-> 本目錄包含 Clawdbot Ansible 安裝器的深入技術分析文件，以繁體中文撰寫，供開發者參考。
+> 本目錄包含 OpenClaw Ansible 安裝器的深入技術分析文件，以繁體中文撰寫，供開發者參考。
 
 ## 文件索引
 
@@ -11,7 +11,7 @@
 | [安全機制分析](./security.md) | 多層防禦架構、UFW/DOCKER-USER/Fail2ban/Systemd 安全強化 |
 | [部署與安裝流程](./deployment.md) | 安裝腳本、部署流程、Release/Development 模式、CI/CD |
 | [開發指南](./development.md) | 如何修改本專案、新增任務、測試檢查清單、常見錯誤 |
-| [Mac Mini M4 部署指南](./mac-mini-m4-deployment.md) | Mac Mini M4 (Apple Silicon) 從零開始部署完整說明 |
+| [Mac Mini M4 部署指南](./mac-mini-m4-deployment.md) | ⚠️ 已不受主 Playbook 支援 — Mac Mini M4 手動部署參考 |
 | [Docker Ubuntu 部署指南](./docker-ubuntu-deployment.md) | Mac Mini M4 上以 Docker Ubuntu 24.04 容器部署，完整 Linux 相容性 |
 
 ## 快速導覽
@@ -26,9 +26,9 @@
 
 ## 專案資訊
 
-- **專案名稱**：Clawdbot Ansible Installer
+- **專案名稱**：OpenClaw Ansible Installer
 - **授權協議**：MIT License
-- **目標平台**：Debian 11+ / Ubuntu 20.04+ / macOS 11+
+- **目標平台**：Debian 11+ / Ubuntu 20.04+
 - **Ansible 版本**：2.14+
 - **目前版本**：v2.0.0
-- **儲存庫**：https://github.com/pasogott/clawdbot-ansible
+- **儲存庫**：https://github.com/pasogott/openclaw-ansible

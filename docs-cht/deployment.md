@@ -15,10 +15,10 @@
 ┌──────────────────────────────────────────────────────────┐
 │                  install.sh 安裝腳本                      │
 │                                                          │
-│  1. 偵測作業系統（Linux/macOS）                           │
+│  1. 偵測作業系統（僅支援 Linux）                          │
 │  2. 檢查 root/sudo 權限                                  │
 │  3. 安裝 Ansible（若未安裝）                              │
-│  4. 複製 clawdbot-ansible 儲存庫                          │
+│  4. 複製 openclaw-ansible 儲存庫                          │
 │  5. 安裝 Ansible Galaxy 集合                              │
 │  6. 呼叫 run-playbook.sh                                 │
 └──────────────┬───────────────────────────────────────────┘
@@ -40,22 +40,22 @@
 │                                                          │
 │  pre_tasks:                                              │
 │   ├── OS 偵測                                            │
+│   ├── 拒絕 macOS（Darwin → 報錯退出）                    │
 │   ├── apt dist-upgrade（Linux）                          │
 │   ├── 安裝 ACL                                           │
-│   ├── 安裝 Ansible 集合                                  │
-│   └── 安裝 Homebrew                                      │
+│   └── 安裝 Ansible 集合                                  │
 │                                                          │
-│  role: clawdbot                                          │
+│  role: openclaw                                          │
 │   ├── system-tools（系統工具）                            │
-│   ├── tailscale（VPN）                                   │
+│   ├── tailscale（VPN，條件式）                           │
 │   ├── user（使用者建立）                                  │
-│   ├── docker（Docker 安裝）                              │
-│   ├── firewall（防火牆配置）                              │
+│   ├── docker-linux（Docker 安裝）                        │
+│   ├── firewall-linux（防火牆配置）                        │
 │   ├── nodejs（Node.js + pnpm）                           │
-│   └── clawdbot（應用安裝）                               │
+│   └── openclaw（應用安裝）                               │
 │                                                          │
 │  post_tasks:                                             │
-│   ├── 顯示 ASCII 藝術                                    │
+│   ├── 顯示龍蝦 ASCII 藝術                                │
 │   └── 建立歡迎訊息                                       │
 └──────────────┬───────────────────────────────────────────┘
                │
@@ -63,8 +63,8 @@
 ┌──────────────────────────────────────────────────────────┐
 │                  安裝後手動步驟                            │
 │                                                          │
-│  1. sudo su - clawdbot                                   │
-│  2. clawdbot onboard --install-daemon                    │
+│  1. sudo nano /home/openclaw/.openclaw/config.yml        │
+│  2. sudo docker exec -it openclaw openclaw login         │
 │  3.（選擇性）sudo tailscale up                           │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -76,14 +76,14 @@
 ### 方式 1：一鍵安裝（curl | bash）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pasogott/clawdbot-ansible/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/pasogott/openclaw-ansible/main/install.sh | bash
 ```
 
 **`install.sh` 執行流程**：
 
 1. **環境偵測**
    - 設定 256 色終端支援
-   - 偵測 OS（`darwin*` → macOS，有 `apt-get` → Linux）
+   - 偵測 OS（有 `apt-get` → Linux）
    - 不支援的 OS 直接退出
 
 2. **權限處理**
@@ -95,7 +95,7 @@ curl -fsSL https://raw.githubusercontent.com/pasogott/clawdbot-ansible/main/inst
    - 若未安裝，透過 `apt-get` 安裝
 
 4. **儲存庫取得**
-   - 在暫存目錄中 `git clone` 整個 clawdbot-ansible 儲存庫
+   - 在暫存目錄中 `git clone` 整個 openclaw-ansible 儲存庫
    - 安裝 `requirements.yml` 中定義的 Ansible 集合
 
 5. **執行 Playbook**
@@ -109,8 +109,8 @@ curl -fsSL https://raw.githubusercontent.com/pasogott/clawdbot-ansible/main/inst
 sudo apt update && sudo apt install -y ansible git
 
 # 複製儲存庫
-git clone https://github.com/pasogott/clawdbot-ansible.git
-cd clawdbot-ansible
+git clone https://github.com/pasogott/openclaw-ansible.git
+cd openclaw-ansible
 
 # 安裝 Ansible 集合
 ansible-galaxy collection install -r requirements.yml
@@ -126,7 +126,7 @@ ansible-galaxy collection install -r requirements.yml
 ansible-playbook playbook.yml --ask-become-pass
 
 # Development 模式
-ansible-playbook playbook.yml --ask-become-pass -e clawdbot_install_mode=development
+ansible-playbook playbook.yml --ask-become-pass -e openclaw_install_mode=development
 
 # 帶自訂變數
 ansible-playbook playbook.yml --ask-become-pass -e @vars.yml
@@ -153,20 +153,12 @@ ansible-playbook playbook.yml --ask-become-pass -e @vars.yml
 | 建構工具 | build-essential, file |
 
 額外設定：
-- 將 clawdbot 使用者預設 shell 改為 zsh
 - 部署全域 Vim 設定
-- 設定 `.bashrc` 和 `.zshrc`（Homebrew PATH、pnpm PATH、色彩支援、別名）
+- 設定 `.bashrc`（pnpm PATH、色彩支援、別名）
 
-#### macOS（brew）
+### 2. Tailscale VPN 安裝（條件式）
 
-透過 Homebrew 安裝同等工具集（部分 Linux 專用工具不適用於 macOS）。
-
-#### 共用設定
-
-- 安裝 oh-my-zsh（以 clawdbot 使用者身份）
-- 配置 Git 全域設定（預設分支、編輯器、別名等）
-
-### 2. Tailscale VPN 安裝
+僅在 `tailscale_enabled: true` 時執行。
 
 #### Linux
 
@@ -179,43 +171,23 @@ ansible-playbook playbook.yml --ask-become-pass -e @vars.yml
 6. 檢查連線狀態，若未連線則顯示指引
 ```
 
-#### macOS
-
-```
-1. 檢查 /Applications/Tailscale.app 是否存在
-2. 若不存在：brew install --cask tailscale
-3. 檢查執行狀態
-4. 若未連線則顯示指引
-```
-
 ### 3. 使用者建立（user）
 
 ```
-1. 建立 clawdbot 系統使用者
+1. 建立 openclaw 系統使用者
    - system: true
    - shell: /bin/bash
-   - home: /home/clawdbot
+   - home: /home/openclaw
 
 2. 配置範圍限定 sudo 權限
-   - /etc/sudoers.d/clawdbot
+   - /etc/sudoers.d/openclaw
    - 使用 visudo 驗證語法
 
-3. 取得 clawdbot UID
-4. 啟用 loginctl lingering
-5. 建立 /run/user/<UID> 目錄
-6. 儲存 UID 為 fact（供 systemd 範本使用）
-
-7. 建立 .ssh 目錄（0700 權限）
-8. 新增 SSH 授權金鑰（若有提供）
-
-9. 設定 .bashrc 環境變數
-   - XDG_RUNTIME_DIR
-   - DBUS_SESSION_BUS_ADDRESS
+3. 建立 .ssh 目錄（0700 權限）
+4. 新增 SSH 授權金鑰（若有提供）
 ```
 
-### 4. Docker 安裝
-
-#### Linux（Docker CE）
+### 4. Docker 安裝（docker-linux）
 
 ```
 1. 安裝前置套件（ca-certificates, curl, gnupg, lsb-release）
@@ -230,22 +202,10 @@ ansible-playbook playbook.yml --ask-become-pass -e @vars.yml
    - docker-buildx-plugin
    - docker-compose-plugin
 7. systemctl enable + start docker
-8. 將 clawdbot 使用者加入 docker 群組
-9. 重置 SSH 連線（套用群組變更）
+8. 將 openclaw 使用者加入 docker 群組
 ```
 
-#### macOS（Docker Desktop）
-
-```
-1. 檢查 /Applications/Docker.app 是否存在
-2. 若不存在：brew install --cask docker
-3. 等待 /var/run/docker.sock（最多 120 秒）
-4. 驗證 docker --version
-```
-
-### 5. 防火牆配置
-
-#### Linux
+### 5. 防火牆配置（firewall-linux）
 
 **Fail2ban 安裝**：
 ```
@@ -266,7 +226,7 @@ ansible-playbook playbook.yml --ask-become-pass -e @vars.yml
 1. apt install ufw
 2. 設定預設政策（deny incoming, allow outgoing, deny routed）
 3. 允許 SSH (22/tcp)
-4. 允許 Tailscale (41641/udp)
+4. 允許 Tailscale (41641/udp)（若 tailscale_enabled）
 5. 偵測預設網路介面
 6. 寫入 DOCKER-USER 鏈到 /etc/ufw/after.rules
 7. 建立 /etc/docker 目錄
@@ -274,15 +234,7 @@ ansible-playbook playbook.yml --ask-become-pass -e @vars.yml
 9. 啟用 + 重載 UFW
 ```
 
-#### macOS
-
-```
-1. 檢查 Application Firewall 狀態
-2. 若停用則啟用
-3. 允許 Tailscale 通過防火牆
-```
-
-### 6. Node.js 安裝
+### 6. Node.js 安裝（nodejs）
 
 ```
 1. 安裝前置套件
@@ -294,77 +246,79 @@ ansible-playbook playbook.yml --ask-become-pass -e @vars.yml
 7. 驗證版本（node --version, pnpm --version）
 ```
 
-### 7. Clawdbot 應用安裝
+### 7. OpenClaw 應用安裝（openclaw）
 
 **共用步驟**：
 ```
 1. 建立目錄結構：
-   - ~/.clawdbot/
-   - ~/.clawdbot/sessions/
-   - ~/.clawdbot/credentials/  (0700)
-   - ~/.clawdbot/data/
-   - ~/.clawdbot/logs/
+   - /opt/openclaw/
+   - /home/openclaw/.openclaw/
+   - /home/openclaw/.openclaw/sessions/
+   - /home/openclaw/.openclaw/credentials/  (0700)
 
-2. 建立 pnpm 目錄：
-   - ~/.local/share/pnpm/
-   - ~/.local/share/pnpm/store/
-   - ~/.local/bin/
-
-3. 配置 pnpm global-dir 和 global-bin-dir
-4. 設定 .bashrc（PNPM_HOME, PATH）
+2. 配置 pnpm global-dir 和 global-bin-dir
+3. 設定 .bashrc（PNPM_HOME, PATH）
 ```
 
-**Release 模式**：
+**Release 模式**（`openclaw-release.yml`）：
 ```
-5a. pnpm install -g clawdbot@latest（以 clawdbot 使用者身份）
-6a. 驗證安裝（clawdbot --version）
+4a. pnpm install -g openclaw@latest（以 openclaw 使用者身份）
+5a. 產生 docker-compose.yml 與 Dockerfile
+6a. 建構 Docker 映像檔
+7a. 啟動 Docker Compose 服務
+8a. 安裝並啟用 systemd 服務（openclaw.service）
 ```
 
-**Development 模式**：
+**Development 模式**（`openclaw-development.yml`）：
 ```
-5b. 建立 ~/code 目錄
-6b. git clone clawdbot 儲存庫
-7b. pnpm install（安裝依賴）
-8b. pnpm build（建構原始碼）
-9b. 驗證 dist/ 目錄存在
-10b. 建立 symlink：~/.local/bin/clawdbot → ~/code/clawdbot/bin/clawdbot.js
-11b. 設定可執行權限
-12b. 驗證安裝
-13b. 新增開發別名到 .bashrc
+4b. 建立 ~/code 目錄
+5b. git clone openclaw 儲存庫
+6b. pnpm install（安裝依賴）
+7b. pnpm build（建構原始碼）
+8b. 建立 symlink：~/.local/bin/openclaw → ~/code/openclaw/bin/openclaw.js
+9b. 設定可執行權限
+10b. 驗證安裝
+11b. 新增開發別名到 .bashrc
 ```
 
 ---
 
 ## 安裝後配置
 
-### 步驟 1：切換使用者
+### 步驟 1：設定 OpenClaw
 
 ```bash
-sudo su - clawdbot
+# 編輯設定檔
+sudo nano /home/openclaw/.openclaw/config.yml
+
+# 重要設定項目：
+# - provider: whatsapp/telegram/signal
+# - phone: your number
+# - ai.provider: anthropic/openai
+# - ai.model: claude-3-5-sonnet-20241022
 ```
 
-首次登入時會顯示歡迎訊息與操作指南。
-
-### 步驟 2：執行初始設定
+### 步驟 2：登入訊息提供者
 
 ```bash
-clawdbot onboard --install-daemon
-```
+# 互動式登入（會提示掃描 QR code 或電話驗證）
+sudo docker exec -it openclaw openclaw login
 
-此指令會：
-- 引導你完成設定精靈
-- 建立 `~/.clawdbot/clawdbot.json`
-- 設定訊息提供者（WhatsApp/Telegram/Signal）
-- 安裝並啟動 systemd daemon
+# 查看連線狀態
+sudo docker logs -f openclaw
+```
 
 ### 步驟 3：連線 Tailscale（選擇性）
 
 ```bash
-# 返回有 sudo 權限的使用者
-exit
-
-# 連線 Tailscale
+# 互動式登入
 sudo tailscale up
+
+# 或使用 auth key 自動連線
+sudo tailscale up --authkey tskey-auth-xxxxx
+
+# 查看狀態
+sudo tailscale status
 ```
 
 ---
@@ -375,19 +329,19 @@ sudo tailscale up
 
 ```bash
 ansible-playbook playbook.yml --ask-become-pass \
-  -e clawdbot_install_mode=development \
-  -e "clawdbot_ssh_keys=['ssh-ed25519 AAAAC3... user@host']"
+  -e openclaw_install_mode=development \
+  -e "openclaw_ssh_keys=['ssh-ed25519 AAAAC3... user@host']"
 ```
 
 ### 方式 2：變數檔案
 
 ```yaml
 # vars.yml
-clawdbot_install_mode: development
-clawdbot_ssh_keys:
+openclaw_install_mode: development
+openclaw_ssh_keys:
   - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGxxxxxxxx user@host"
-clawdbot_repo_url: "https://github.com/YOUR_USERNAME/clawdbot.git"
-clawdbot_repo_branch: "main"
+openclaw_repo_url: "https://github.com/YOUR_USERNAME/openclaw.git"
+openclaw_repo_branch: "main"
 tailscale_authkey: "tskey-auth-xxxxxxxxxxxxx"
 ```
 
@@ -446,10 +400,15 @@ ansible-playbook playbook.yml --ask-become-pass
 ### 系統級設定
 
 ```
+/opt/openclaw/                       # OpenClaw Docker 設定
+├── Dockerfile                       # 容器映像檔定義
+└── docker-compose.yml               # Compose 服務定義
+
 /etc/docker/daemon.json              # Docker daemon 設定
 /etc/ufw/after.rules                 # DOCKER-USER iptables 規則
 /etc/fail2ban/jail.local             # Fail2ban SSH 防護設定
-/etc/sudoers.d/clawdbot              # 範圍限定 sudo 權限
+/etc/sudoers.d/openclaw              # 範圍限定 sudo 權限
+/etc/systemd/system/openclaw.service # Systemd 服務定義
 /etc/apt/apt.conf.d/20auto-upgrades  # 自動更新設定
 /etc/apt/apt.conf.d/50unattended-upgrades  # 安全更新來源
 /etc/vim/vimrc.local                 # 全域 Vim 設定
@@ -461,26 +420,23 @@ ansible-playbook playbook.yml --ask-become-pass
 ### 使用者級設定
 
 ```
-/home/clawdbot/
-├── .clawdbot/                  # Clawdbot 設定與資料
-│   ├── clawdbot.json           # 應用設定（由 clawdbot onboard 建立）
+/home/openclaw/
+├── .openclaw/                  # OpenClaw 設定與資料
+│   ├── config.yml              # 應用設定（手動或由 openclaw 工具建立）
 │   ├── sessions/               # 工作階段資料
 │   ├── credentials/            # 認證資料（0700 權限）
-│   ├── data/                   # 應用資料
 │   └── logs/                   # 應用日誌
 ├── .local/
 │   ├── bin/
-│   │   └── clawdbot            # 可執行檔或 symlink
+│   │   └── openclaw            # 可執行檔或 symlink（Development 模式）
 │   └── share/pnpm/             # pnpm 全域套件
 ├── .ssh/
 │   └── authorized_keys         # SSH 公鑰
-├── .oh-my-zsh/                 # Oh My Zsh
 ├── .bashrc                     # Bash 設定（環境變數、別名）
-├── .zshrc                      # Zsh 設定
 │
 └── code/                       # 僅 Development 模式
-    └── clawdbot/               # Git 儲存庫
-        ├── bin/clawdbot.js
+    └── openclaw/               # Git 儲存庫
+        ├── bin/openclaw.js
         ├── dist/
         ├── src/
         └── package.json
@@ -508,6 +464,7 @@ sudo iptables -L DOCKER-USER -n -v
 # 重啟 Docker + UFW
 sudo systemctl restart docker
 sudo ufw reload
+sudo systemctl restart openclaw
 ```
 
 ### 埠口衝突
@@ -516,8 +473,10 @@ sudo ufw reload
 # 找出佔用 3000 埠的進程
 sudo ss -tlnp | grep 3000
 
-# 修改 Clawdbot 埠口
-# 編輯 docker-compose.yml 或設定檔
+# 修改 OpenClaw 埠口
+sudo nano /opt/openclaw/docker-compose.yml
+# 修改："127.0.0.1:3001:3000"
+sudo systemctl restart openclaw
 ```
 
 ### 防火牆鎖定（無法 SSH）
@@ -529,40 +488,28 @@ sudo ufw allow 22/tcp
 sudo ufw enable
 ```
 
-### DBus 問題
-
-```bash
-# 檢查環境變數
-echo $XDG_RUNTIME_DIR
-echo $DBUS_SESSION_BUS_ADDRESS
-
-# 手動設定
-export XDG_RUNTIME_DIR=/run/user/$(id -u)
-source ~/.bashrc
-```
-
 ---
 
 ## 解除安裝
 
 ```bash
 # 停止服務
-sudo systemctl stop clawdbot
-sudo systemctl disable clawdbot
+sudo systemctl stop openclaw
+sudo systemctl disable openclaw
 sudo tailscale down
 
 # 移除容器與資料
-sudo docker compose -f /opt/clawdbot/docker-compose.yml down
-sudo rm -rf /opt/clawdbot
-sudo rm -rf /home/clawdbot/.clawdbot
-sudo rm -f /etc/systemd/system/clawdbot.service
+sudo docker compose -f /opt/openclaw/docker-compose.yml down
+sudo rm -rf /opt/openclaw
+sudo rm -rf /home/openclaw/.openclaw
+sudo rm -f /etc/systemd/system/openclaw.service
 sudo systemctl daemon-reload
 
 # 移除套件（選擇性）
 sudo apt remove --purge tailscale docker-ce docker-ce-cli containerd.io docker-compose-plugin nodejs
 
 # 移除使用者（選擇性）
-sudo userdel -r clawdbot
+sudo userdel -r openclaw
 
 # 重置防火牆（選擇性）
 sudo ufw disable

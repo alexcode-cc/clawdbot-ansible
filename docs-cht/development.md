@@ -1,6 +1,6 @@
 # 開發指南
 
-本文件說明如何修改、擴展和維護 Clawdbot Ansible Installer 專案。
+本文件說明如何修改、擴展和維護 OpenClaw Ansible Installer 專案。
 
 ---
 
@@ -30,8 +30,8 @@ ansible-galaxy collection install -r requirements.yml
 
 ```bash
 # 1. 複製儲存庫
-git clone https://github.com/pasogott/clawdbot-ansible.git
-cd clawdbot-ansible
+git clone https://github.com/pasogott/openclaw-ansible.git
+cd openclaw-ansible
 
 # 2. 建立功能分支
 git checkout -b feature/my-feature
@@ -64,35 +64,35 @@ git push origin feature/my-feature
     state: directory
     mode: "{{ item.mode }}"
   loop:
-    - { path: "{{ config_dir }}", mode: '0755' }
-    - { path: "{{ config_dir }}/sessions", mode: '0755' }
-    - { path: "{{ config_dir }}/credentials", mode: '0700' }
+    - { path: "{{ openclaw_config_dir }}", mode: '0755' }
+    - { path: "{{ openclaw_config_dir }}/sessions", mode: '0755' }
+    - { path: "{{ openclaw_config_dir }}/credentials", mode: '0700' }
 
 # ❌ 錯誤 — 重複任務
 - name: Create config dir
   ansible.builtin.file:
-    path: "{{ config_dir }}"
+    path: "{{ openclaw_config_dir }}"
     state: directory
     mode: '0755'
 
 - name: Create sessions dir
   ansible.builtin.file:
-    path: "{{ config_dir }}/sessions"
+    path: "{{ openclaw_config_dir }}/sessions"
     state: directory
     mode: '0755'
 ```
 
-#### 不使用 become_user
+#### 不使用 become_user 在頂層
 
 本 Playbook 以 root 執行（`become: true`），不需要額外的 `become_user`。
 若需要以特定使用者執行，使用：
 
 ```yaml
-- name: Install as clawdbot user
+- name: Install as openclaw user
   ansible.builtin.shell:
-    cmd: pnpm install -g clawdbot@latest
+    cmd: pnpm install -g openclaw@latest
   become: true
-  become_user: "{{ clawdbot_user }}"
+  become_user: "{{ openclaw_user }}"
 ```
 
 #### 使用完整模組名稱（FQCN）
@@ -117,13 +117,13 @@ git push origin feature/my-feature
 # ✅ 正確 — V2 模組
 - name: Start containers
   community.docker.docker_compose_v2:
-    project_src: /opt/clawdbot
+    project_src: /opt/openclaw
     state: present
 
 # ❌ 錯誤 — 已棄用的 V1 模組
 - name: Start containers
   docker_compose:
-    project_src: /opt/clawdbot
+    project_src: /opt/openclaw
 ```
 
 #### docker compose 版本
@@ -131,15 +131,15 @@ git push origin feature/my-feature
 ```yaml
 # ✅ 正確 — compose file 不需要 version 欄位
 services:
-  clawdbot:
-    image: clawdbot
+  openclaw:
+    image: openclaw
     ports:
       - "127.0.0.1:3000:3000"
 
 # ❌ 錯誤 — version 欄位已棄用
 version: "3.8"
 services:
-  clawdbot:
+  openclaw:
     ...
 ```
 
@@ -163,8 +163,8 @@ ports:
 ```dockerfile
 # ✅ 正確
 FROM node:22-slim
-RUN useradd -m clawdbot
-USER clawdbot
+RUN useradd -m openclaw
+USER openclaw
 CMD ["node", "server.js"]
 
 # ❌ 錯誤 — 以 root 執行
@@ -206,15 +206,20 @@ CMD ["node", "server.js"]
 
 1. **建立任務檔案**
 
-   如果任務需要區分 OS，建立三個檔案：
+   如果任務僅需支援 Linux（目前所有任務均為 Linux only）：
    ```
-   roles/clawdbot/tasks/
-   ├── my-feature.yml           # 調度器
-   ├── my-feature-linux.yml     # Linux 實作
-   └── my-feature-macos.yml     # macOS 實作
+   roles/openclaw/tasks/
+   └── my-feature-linux.yml     # Linux 實作
    ```
 
-2. **撰寫調度器（OS 分流）**
+   若有條件式調度需求，可建立調度器：
+   ```
+   roles/openclaw/tasks/
+   ├── my-feature.yml           # 調度器
+   └── my-feature-linux.yml     # Linux 實作
+   ```
+
+2. **撰寫調度器（若需要）**
 
    ```yaml
    # my-feature.yml
@@ -222,23 +227,19 @@ CMD ["node", "server.js"]
    - name: Include Linux my-feature
      ansible.builtin.include_tasks: my-feature-linux.yml
      when: ansible_os_family == 'Debian'
-
-   - name: Include macOS my-feature
-     ansible.builtin.include_tasks: my-feature-macos.yml
-     when: ansible_os_family == 'Darwin'
    ```
 
 3. **更新 main.yml**
 
-   在 `roles/clawdbot/tasks/main.yml` 中加入：
+   在 `roles/openclaw/tasks/main.yml` 中加入：
    ```yaml
    - name: Include my-feature tasks
-     ansible.builtin.include_tasks: my-feature.yml
+     ansible.builtin.include_tasks: my-feature-linux.yml
    ```
 
    **注意順序**：確保新任務放在正確的位置。參考現有順序：
    ```
-   system-tools → tailscale → user → docker → firewall → nodejs → clawdbot
+   system-tools → tailscale → user → docker → firewall → nodejs → openclaw
    ```
 
 4. **使用 `--check` 測試**
@@ -253,7 +254,7 @@ CMD ["node", "server.js"]
 
 ### 新增變數
 
-在 `roles/clawdbot/defaults/main.yml` 中定義：
+在 `roles/openclaw/defaults/main.yml` 中定義：
 
 ```yaml
 # 新功能設定
@@ -273,7 +274,7 @@ my_feature_port: 8080
 
 ### 新增 Handler
 
-在 `roles/clawdbot/handlers/main.yml` 中新增：
+在 `roles/openclaw/handlers/main.yml` 中新增：
 
 ```yaml
 - name: Restart my-service
@@ -294,7 +295,7 @@ my_feature_port: 8080
 
 ### 新增 Template
 
-在 `roles/clawdbot/templates/` 中建立 `.j2` 檔案：
+在 `roles/openclaw/templates/` 中建立 `.j2` 檔案：
 
 ```jinja2
 # my-config.conf.j2
@@ -341,7 +342,7 @@ enabled={{ my_feature_enabled | lower }}
 
 ### daemon.json 變更
 
-修改 `roles/clawdbot/templates/daemon.json.j2`。
+修改 `roles/openclaw/templates/daemon.json.j2`。
 
 **重要**：
 - 此檔案的變更會觸發 `Restart docker` handler
@@ -378,7 +379,7 @@ ansible-playbook playbook.yml --check
 
 ```bash
 # 5. 完整安裝
-curl -fsSL https://raw.githubusercontent.com/.../install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/pasogott/openclaw-ansible/main/install.sh | bash
 
 # 6. 驗證安全設定
 sudo ufw status verbose
@@ -423,10 +424,10 @@ ansible-playbook playbook.yml --ask-become-pass
 
 | 檔案 | 修改場景 |
 |------|---------|
-| `roles/clawdbot/tasks/*.yml` | 新增/修改安裝步驟 |
-| `roles/clawdbot/defaults/main.yml` | 新增/修改變數 |
-| `roles/clawdbot/templates/*.j2` | 修改設定檔範本 |
-| `roles/clawdbot/handlers/main.yml` | 新增服務重啟觸發 |
+| `roles/openclaw/tasks/*.yml` | 新增/修改安裝步驟 |
+| `roles/openclaw/defaults/main.yml` | 新增/修改變數 |
+| `roles/openclaw/templates/*.j2` | 修改設定檔範本 |
+| `roles/openclaw/handlers/main.yml` | 新增服務重啟觸發 |
 | `playbook.yml` | 修改前置/後續作業 |
 
 ### 較少修改的檔案
@@ -509,15 +510,16 @@ ansible-playbook playbook.yml --ask-become-pass
 - **安裝速度**：pnpm 的依賴解析更快
 - **嚴格依賴**：pnpm 預設使用嚴格的 node_modules 結構
 
-### 為什麼安裝後不自動配置 Clawdbot？
+### 為什麼移除 macOS 支援？
 
-v2.0.0 的設計決策：
-- Clawdbot 的設定需要使用者互動（選擇提供者、輸入 API key 等）
-- 由 `clawdbot onboard --install-daemon` 統一處理，而非 Ansible
-- 這分離了「基礎設施準備」和「應用配置」兩個層次
+- macOS 缺少 UFW、Fail2ban、systemd 等關鍵安全元件
+- 維護兩套作業系統的差異化代碼增加複雜度和出錯風險
+- macOS 適合開發環境，正式部署應使用 Linux
+- 需要 macOS 支援的使用者可透過 Docker Ubuntu 容器取得完整功能（參閱 [Docker Ubuntu 部署指南](./docker-ubuntu-deployment.md)）
 
-### 為什麼使用 Homebrew（包括在 Linux 上）？
+### 為什麼 OpenClaw 使用 Docker 容器執行？
 
-- **統一工具鏈**：Linux 和 macOS 使用相同的套件管理工具
-- **使用者空間安裝**：Homebrew 安裝在使用者空間，不影響系統套件
-- **最新版本**：Homebrew 通常提供比系統套件庫更新的版本
+- **隔離**：容器提供額外的安全隔離層
+- **一致性**：容器化確保執行環境一致
+- **管理方便**：透過 systemd + docker-compose 管理生命週期
+- **縱深防禦**：容器 + localhost 綁定 + DOCKER-USER 三層保護

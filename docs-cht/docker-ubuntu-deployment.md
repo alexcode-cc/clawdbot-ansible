@@ -1,19 +1,19 @@
 ---
 title: Docker Ubuntu 24.04 部署指南
-description: 在 Mac Mini M4 上使用 Docker Ubuntu 24.04 容器部署 Clawdbot 的完整說明
+description: 在 Mac Mini M4 上使用 Docker Ubuntu 24.04 容器部署 OpenClaw 的完整說明
 ---
 
 # Docker Ubuntu 24.04 部署指南（Mac Mini M4）
 
-在 Mac Mini M4 上透過 Docker 執行 Ubuntu 24.04 容器，並在容器內依照標準 Ubuntu 部署流程安裝 Clawdbot。
+在 Mac Mini M4 上透過 Docker 執行 Ubuntu 24.04 容器，並在容器內依照標準 Ubuntu 部署流程安裝 OpenClaw。
 
 ## 為什麼選擇 Docker Ubuntu？
 
-直接在 macOS 上部署 Clawdbot 會遇到多項相容性問題（參見 [Mac Mini M4 部署指南](./mac-mini-m4-deployment.md)）。使用 Docker Ubuntu 容器的優點：
+由於 OpenClaw Ansible Installer 的主 Playbook **不支援 macOS**（會在 pre_tasks 直接報錯退出），直接在 macOS 上部署會遇到根本性的相容性問題（參見 [Mac Mini M4 部署指南](./mac-mini-m4-deployment.md)）。使用 Docker Ubuntu 容器的優點：
 
 | 特性 | 原生 macOS | Docker Ubuntu |
 |------|-----------|---------------|
-| Ansible Playbook 完整支援 | ❌ 部分失敗 | ✅ 全部通過 |
+| Ansible Playbook 完整支援 | ❌ 主 Playbook 拒絕執行 | ✅ 全部通過 |
 | UFW + DOCKER-USER 防火牆 | ❌ | ✅（需 privileged） |
 | Fail2ban SSH 防護 | ❌ | ✅ |
 | systemd 服務管理 | ❌ | ✅（需 systemd 映像檔） |
@@ -99,7 +99,7 @@ docker compose version
 │  │  │  Ubuntu 24.04 容器（privileged 模式）        │  │  │
 │  │  │                                             │  │  │
 │  │  │  ┌─────────┐ ┌──────────┐ ┌─────────────┐   │  │  │
-│  │  │  │ systemd │ │ Clawdbot │ │ UFW/Fail2ban│   │  │  │
+│  │  │  │ systemd │ │ OpenClaw │ │ UFW/Fail2ban│   │  │  │
 │  │  │  └─────────┘ └──────────┘ └─────────────┘   │  │  │
 │  │  │  ┌─────────┐ ┌──────────┐ ┌─────────────┐   │  │  │
 │  │  │  │ Docker  │ │ Node.js  │ │ Tailscale   │   │  │  │
@@ -135,18 +135,18 @@ docker info
 
 ```bash
 # 建立持久化資料的 Docker volumes
-docker volume create clawdbot-home
-docker volume create clawdbot-config
+docker volume create openclaw-home
+docker volume create openclaw-config
 
 # 建立並啟動容器
 docker run -d \
-  --name clawdbot-ubuntu \
-  --hostname clawdbot-server \
+  --name openclaw-ubuntu \
+  --hostname openclaw-server \
   --privileged \
   --cgroupns=host \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-  -v clawdbot-home:/home/clawdbot \
-  -v clawdbot-config:/opt/clawdbot-ansible \
+  -v openclaw-home:/home/openclaw \
+  -v openclaw-config:/opt/openclaw-ansible \
   -p 127.0.0.1:3000:3000 \
   -p 127.0.0.1:2222:22 \
   --tmpfs /run \
@@ -162,9 +162,9 @@ docker run -d \
 | `--privileged` | 啟用特權模式，systemd/iptables/UFW 需要 |
 | `--cgroupns=host` | 使用主機的 cgroup namespace，systemd 需要 |
 | `-v /sys/fs/cgroup:...` | 掛載 cgroup 檔案系統 |
-| `-v clawdbot-home:...` | 持久化 clawdbot 使用者家目錄 |
-| `-v clawdbot-config:...` | 持久化 Ansible playbook |
-| `-p 127.0.0.1:3000:3000` | 轉發 Clawdbot 閘道器埠口 |
+| `-v openclaw-home:...` | 持久化 openclaw 使用者家目錄 |
+| `-v openclaw-config:...` | 持久化 Ansible playbook |
+| `-p 127.0.0.1:3000:3000` | 轉發 OpenClaw 閘道器埠口 |
 | `-p 127.0.0.1:2222:22` | 轉發 SSH 埠口（用於遠端管理） |
 | `--tmpfs /run` | systemd 需要的暫存檔系統 |
 | `/sbin/init` | 以 systemd 為 PID 1 啟動 |
@@ -176,7 +176,7 @@ docker run -d \
 docker ps
 
 # 確認 systemd 已啟動
-docker exec clawdbot-ubuntu systemctl status --no-pager
+docker exec openclaw-ubuntu systemctl status --no-pager
 ```
 
 ### 方式 B：簡易容器（不含 systemd）
@@ -185,9 +185,9 @@ docker exec clawdbot-ubuntu systemctl status --no-pager
 
 ```bash
 docker run -d \
-  --name clawdbot-ubuntu \
-  --hostname clawdbot-server \
-  -v clawdbot-home:/home/clawdbot \
+  --name openclaw-ubuntu \
+  --hostname openclaw-server \
+  -v openclaw-home:/home/openclaw \
   -p 127.0.0.1:3000:3000 \
   ubuntu:24.04 \
   tail -f /dev/null
@@ -202,7 +202,7 @@ docker run -d \
 ### 進入容器
 
 ```bash
-docker exec -it clawdbot-ubuntu bash
+docker exec -it openclaw-ubuntu bash
 ```
 
 ### 安裝基礎套件
@@ -237,10 +237,10 @@ git --version
 
 ```bash
 # 進入掛載目錄
-cd /opt/clawdbot-ansible
+cd /opt/openclaw-ansible
 
 # 複製儲存庫
-git clone https://github.com/pasogott/clawdbot-ansible.git .
+git clone https://github.com/pasogott/openclaw-ansible.git .
 
 # 安裝 Ansible Galaxy 集合
 ansible-galaxy collection install -r requirements.yml
@@ -254,17 +254,17 @@ ansible-galaxy collection install -r requirements.yml
 
 ```bash
 # 在容器內以 root 執行（容器內已是 root）
-cd /opt/clawdbot-ansible
+cd /opt/openclaw-ansible
 ansible-playbook playbook.yml -e ansible_become=false
 ```
 
 ### Development 模式
 
 ```bash
-cd /opt/clawdbot-ansible
+cd /opt/openclaw-ansible
 ansible-playbook playbook.yml \
   -e ansible_become=false \
-  -e clawdbot_install_mode=development
+  -e openclaw_install_mode=development
 ```
 
 ### 帶自訂變數
@@ -272,7 +272,7 @@ ansible-playbook playbook.yml \
 ```bash
 ansible-playbook playbook.yml \
   -e ansible_become=false \
-  -e "clawdbot_ssh_keys=['ssh-ed25519 AAAAC3... user@host']"
+  -e "openclaw_ssh_keys=['ssh-ed25519 AAAAC3... user@host']"
 ```
 
 ### Playbook 執行過程
@@ -280,32 +280,18 @@ ansible-playbook playbook.yml \
 在容器內執行時，以下任務將依序完成：
 
 ```
-✅ 1. system-tools.yml    → apt 安裝系統工具（完整支援）
-✅ 2. tailscale.yml       → Tailscale 安裝（可選跳過）
-✅ 3. user.yml            → 建立 clawdbot 使用者、sudoers、SSH 金鑰
-✅ 4. docker.yml          → 安裝 Docker CE（Docker-in-Docker）
-✅ 5. firewall.yml        → UFW + Fail2ban + DOCKER-USER（需 privileged）
-✅ 6. nodejs.yml          → Node.js 22.x + pnpm（apt 安裝）
-✅ 7. clawdbot.yml        → 安裝 Clawdbot（pnpm 或原始碼建構）
+✅ 1. system-tools-linux.yml → apt 安裝系統工具（完整支援）
+✅ 2. tailscale-linux.yml    → Tailscale 安裝（可選，條件式）
+✅ 3. user.yml               → 建立 openclaw 使用者、sudoers、SSH 金鑰
+✅ 4. docker-linux.yml       → 安裝 Docker CE（Docker-in-Docker）
+✅ 5. firewall-linux.yml     → UFW + Fail2ban + DOCKER-USER（需 privileged）
+✅ 6. nodejs.yml             → Node.js 22.x + pnpm（apt 安裝）
+✅ 7. openclaw.yml           → 安裝 OpenClaw（pnpm 或原始碼建構）
 ```
 
-> **與原生 macOS 的差異**：所有 7 個步驟在 Docker Ubuntu 中都能完整執行，不需要手動補丁。
+> **與原生 macOS 的差異**：所有 7 個步驟在 Docker Ubuntu 中都能完整執行，不需要任何手動補丁。
 
 ### 處理可能的錯誤
-
-**如果 Homebrew 安裝失敗**：
-
-Playbook 的 `pre_tasks` 會嘗試安裝 Homebrew。在容器環境中可能因缺少互動式 shell 而失敗。解決方式：
-
-```bash
-# 手動安裝 Homebrew（以非 root 使用者）
-# 先建立 clawdbot 使用者
-useradd -m -s /bin/bash clawdbot
-su - clawdbot -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
-
-# 然後重新執行 Playbook
-ansible-playbook playbook.yml -e ansible_become=false
-```
 
 **如果 Docker CE 安裝後無法啟動**：
 
@@ -319,11 +305,11 @@ Tailscale 在容器內需要 TUN 裝置。參見「[Tailscale VPN 設定](#tails
 
 ## 步驟五：安裝後配置
 
-### 切換到 clawdbot 使用者
+### 切換到 openclaw 使用者
 
 ```bash
 # 在容器內
-sudo su - clawdbot
+sudo su - openclaw
 ```
 
 ### 確認環境
@@ -333,30 +319,31 @@ echo "使用者: $(whoami)"
 echo "家目錄: $HOME"
 echo "Node.js: $(node --version 2>/dev/null || echo '未找到')"
 echo "pnpm: $(pnpm --version 2>/dev/null || echo '未找到')"
-echo "Clawdbot: $(~/.local/bin/clawdbot --version 2>/dev/null || echo '未找到')"
+echo "OpenClaw: $(~/.local/bin/openclaw --version 2>/dev/null || echo '未找到')"
 echo "Docker: $(docker --version 2>/dev/null || echo '未找到')"
 ```
 
-### 執行初始設定
+### 設定 OpenClaw
 
 ```bash
-clawdbot onboard --install-daemon
-```
+# 編輯設定檔
+nano ~/.openclaw/config.yml
 
-此指令會：
-- 建立設定檔 `~/.clawdbot/clawdbot.json`
-- 引導選擇訊息提供者（WhatsApp / Telegram / Signal）
-- 設定 AI 模型 API 金鑰
-- 安裝 systemd daemon 並啟動服務
+# 登入訊息提供者
+sudo docker exec -it openclaw openclaw login
+
+# 查看日誌
+sudo docker logs -f openclaw
+```
 
 ### 驗證服務執行
 
 ```bash
 # 檢查 systemd 服務狀態
-sudo systemctl status clawdbot
+sudo systemctl status openclaw
 
 # 查看日誌
-sudo journalctl -u clawdbot -f
+sudo journalctl -u openclaw -f
 
 # 測試閘道器
 curl http://localhost:3000
@@ -364,7 +351,7 @@ curl http://localhost:3000
 
 ### 從 Mac 主機存取
 
-Clawdbot 閘道器已透過 `-p 127.0.0.1:3000:3000` 轉發到主機：
+OpenClaw 閘道器已透過 `-p 127.0.0.1:3000:3000` 轉發到主機：
 
 ```bash
 # 在 Mac 主機上
@@ -378,7 +365,7 @@ open http://localhost:3000
 
 ## 容器內 Docker（Docker-in-Docker）
 
-Clawdbot 使用 Docker 來執行沙箱環境。在容器內有兩種方式使用 Docker：
+OpenClaw 使用 Docker 來執行容器。在 Ubuntu 容器內有兩種方式使用 Docker：
 
 ### 方式 A：Docker-in-Docker（DinD）— Playbook 預設方式
 
@@ -396,18 +383,18 @@ docker run --rm hello-world
 
 ```bash
 # 停止並移除舊容器
-docker stop clawdbot-ubuntu && docker rm clawdbot-ubuntu
+docker stop openclaw-ubuntu && docker rm openclaw-ubuntu
 
 # 重新建立，掛載 Docker socket
 docker run -d \
-  --name clawdbot-ubuntu \
-  --hostname clawdbot-server \
+  --name openclaw-ubuntu \
+  --hostname openclaw-server \
   --privileged \
   --cgroupns=host \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v clawdbot-home:/home/clawdbot \
-  -v clawdbot-config:/opt/clawdbot-ansible \
+  -v openclaw-home:/home/openclaw \
+  -v openclaw-config:/opt/openclaw-ansible \
   -p 127.0.0.1:3000:3000 \
   -p 127.0.0.1:2222:22 \
   --tmpfs /run \
@@ -419,7 +406,7 @@ docker run -d \
 然後在容器內安裝 Docker CLI（不含 daemon）：
 
 ```bash
-docker exec -it clawdbot-ubuntu bash
+docker exec -it openclaw-ubuntu bash
 
 # 只安裝 CLI 工具
 apt update
@@ -429,7 +416,7 @@ apt install -y docker-ce-cli docker-compose-plugin
 docker ps
 ```
 
-> **注意**：使用方式 B 時，需要在執行 Playbook 前跳過 Docker 安裝步驟，或在 Playbook 的 `docker-linux.yml` 階段失敗後手動處理。
+> **注意**：使用方式 B 時，需要在執行 Playbook 前設定 `ci_test: true` 跳過 Docker 安裝步驟。
 
 ---
 
@@ -481,8 +468,8 @@ ssh -L 3000:localhost:3000 user@mac-tailscale-ip
 
 | Volume | 容器路徑 | 用途 |
 |--------|---------|------|
-| `clawdbot-home` | `/home/clawdbot` | 使用者資料、設定、認證 |
-| `clawdbot-config` | `/opt/clawdbot-ansible` | Ansible Playbook |
+| `openclaw-home` | `/home/openclaw` | 使用者資料、設定、認證 |
+| `openclaw-config` | `/opt/openclaw-ansible` | Ansible Playbook |
 
 即使容器被刪除重建，這些資料都會保留。
 
@@ -493,21 +480,21 @@ ssh -L 3000:localhost:3000 user@mac-tailscale-ip
 docker volume ls
 
 # 檢查 volume 詳細資訊
-docker volume inspect clawdbot-home
+docker volume inspect openclaw-home
 
 # 備份 volume 資料
 docker run --rm \
-  -v clawdbot-home:/data \
+  -v openclaw-home:/data \
   -v $(pwd):/backup \
   ubuntu:24.04 \
-  tar czf /backup/clawdbot-home-backup.tar.gz -C /data .
+  tar czf /backup/openclaw-home-backup.tar.gz -C /data .
 
 # 還原 volume 資料
 docker run --rm \
-  -v clawdbot-home:/data \
+  -v openclaw-home:/data \
   -v $(pwd):/backup \
   ubuntu:24.04 \
-  bash -c "cd /data && tar xzf /backup/clawdbot-home-backup.tar.gz"
+  bash -c "cd /data && tar xzf /backup/openclaw-home-backup.tar.gz"
 ```
 
 ### 備份排程
@@ -518,7 +505,7 @@ docker run --rm \
 # 加入 crontab（每天凌晨 3 點備份）
 crontab -e
 # 加入以下行：
-# 0 3 * * * docker run --rm -v clawdbot-home:/data -v ~/backups:/backup ubuntu:24.04 tar czf /backup/clawdbot-$(date +\%Y\%m\%d).tar.gz -C /data .
+# 0 3 * * * docker run --rm -v openclaw-home:/data -v ~/backups:/backup ubuntu:24.04 tar czf /backup/openclaw-$(date +\%Y\%m\%d).tar.gz -C /data .
 ```
 
 ---
@@ -529,26 +516,26 @@ crontab -e
 
 ```bash
 # 啟動容器
-docker start clawdbot-ubuntu
+docker start openclaw-ubuntu
 
 # 停止容器
-docker stop clawdbot-ubuntu
+docker stop openclaw-ubuntu
 
 # 重啟容器
-docker restart clawdbot-ubuntu
+docker restart openclaw-ubuntu
 
 # 進入容器 shell
-docker exec -it clawdbot-ubuntu bash
+docker exec -it openclaw-ubuntu bash
 
-# 以 clawdbot 使用者進入
-docker exec -it -u clawdbot clawdbot-ubuntu bash
+# 以 openclaw 使用者進入
+docker exec -it -u openclaw openclaw-ubuntu bash
 
 # 查看容器日誌
-docker logs clawdbot-ubuntu
-docker logs -f clawdbot-ubuntu  # 持續追蹤
+docker logs openclaw-ubuntu
+docker logs -f openclaw-ubuntu  # 持續追蹤
 
 # 查看容器資源使用
-docker stats clawdbot-ubuntu
+docker stats openclaw-ubuntu
 ```
 
 ### 容器自動重啟
@@ -557,7 +544,7 @@ docker stats clawdbot-ubuntu
 
 ```bash
 # 設定自動重啟策略
-docker update --restart unless-stopped clawdbot-ubuntu
+docker update --restart unless-stopped openclaw-ubuntu
 ```
 
 這樣當 Mac 重新開機且 Docker Desktop 啟動後，容器會自動恢復運行。
@@ -568,16 +555,16 @@ docker update --restart unless-stopped clawdbot-ubuntu
 
 ```bash
 # 容器內安裝並啟動 SSH
-docker exec clawdbot-ubuntu bash -c "apt install -y openssh-server && systemctl enable ssh && systemctl start ssh"
+docker exec openclaw-ubuntu bash -c "apt install -y openssh-server && systemctl enable ssh && systemctl start ssh"
 
-# 設定 clawdbot 使用者的密碼或 SSH 金鑰
-docker exec clawdbot-ubuntu bash -c "echo 'clawdbot:YOUR_PASSWORD' | chpasswd"
+# 設定 openclaw 使用者的密碼或 SSH 金鑰
+docker exec openclaw-ubuntu bash -c "echo 'openclaw:YOUR_PASSWORD' | chpasswd"
 
 # 從 Mac 主機 SSH 到容器
-ssh clawdbot@localhost -p 2222
+ssh openclaw@localhost -p 2222
 
 # 從其他裝置（經過 Tailscale）
-ssh clawdbot@mac-tailscale-ip -p 2222
+ssh openclaw@mac-tailscale-ip -p 2222
 ```
 
 ---
@@ -588,7 +575,7 @@ ssh clawdbot@mac-tailscale-ip -p 2222
 
 | 主機埠口 | 容器埠口 | 服務 |
 |---------|---------|------|
-| `127.0.0.1:3000` | `3000` | Clawdbot Gateway |
+| `127.0.0.1:3000` | `3000` | OpenClaw Gateway |
 | `127.0.0.1:2222` | `22` | SSH |
 
 ### 新增埠口映射
@@ -597,12 +584,12 @@ ssh clawdbot@mac-tailscale-ip -p 2222
 
 ```bash
 # 方式 1：重建容器（增加 -p 參數）
-docker stop clawdbot-ubuntu && docker rm clawdbot-ubuntu
+docker stop openclaw-ubuntu && docker rm openclaw-ubuntu
 # 然後重新執行 docker run，加上新的 -p 參數
 
 # 方式 2：使用 SSH tunnel（不需重建容器）
 # 從 Mac 主機轉發容器內的 8080 埠
-ssh -L 8080:localhost:8080 clawdbot@localhost -p 2222
+ssh -L 8080:localhost:8080 openclaw@localhost -p 2222
 ```
 
 ### 容器內防火牆
@@ -627,31 +614,31 @@ sudo iptables -L DOCKER-USER -n -v 2>/dev/null || echo "DOCKER-USER 鏈未建立
 
 ```bash
 # 1. Docker 容器運行中
-docker ps | grep clawdbot-ubuntu
+docker ps | grep openclaw-ubuntu
 # ✅ 容器狀態為 Up
 
 # 2. 埠口轉發正常
 curl -s http://localhost:3000 > /dev/null && echo "✅ Port 3000 OK" || echo "❌ Port 3000 Failed"
 
 # 3. SSH 進入容器正常
-ssh -o ConnectTimeout=5 clawdbot@localhost -p 2222 exit 2>/dev/null && echo "✅ SSH OK" || echo "⚠️ SSH not configured"
+ssh -o ConnectTimeout=5 openclaw@localhost -p 2222 exit 2>/dev/null && echo "✅ SSH OK" || echo "⚠️ SSH not configured"
 
 # 4. Volume 存在
-docker volume ls | grep clawdbot
-# ✅ clawdbot-home 和 clawdbot-config 存在
+docker volume ls | grep openclaw
+# ✅ openclaw-home 和 openclaw-config 存在
 ```
 
 ### 容器內
 
 ```bash
-docker exec -it clawdbot-ubuntu bash
+docker exec -it openclaw-ubuntu bash
 
 # 5. systemd 運行中
 systemctl is-system-running
 # ✅ running 或 degraded（部分服務可能不適用於容器）
 
-# 6. Clawdbot 已安裝
-sudo su - clawdbot -c '~/.local/bin/clawdbot --version'
+# 6. OpenClaw 已安裝
+sudo su - openclaw -c '~/.local/bin/openclaw --version'
 # ✅ 顯示版本號
 
 # 7. Node.js 已安裝
@@ -674,9 +661,9 @@ sudo ufw status
 sudo fail2ban-client status sshd
 # ✅ Jail 已啟用
 
-# 12. Clawdbot 服務
-sudo systemctl status clawdbot
-# ✅ active (running)（需先完成 onboard）
+# 12. OpenClaw 服務
+sudo systemctl status openclaw
+# ✅ active (running)（需先完成設定）
 ```
 
 ---
@@ -687,7 +674,7 @@ sudo systemctl status clawdbot
 
 ```bash
 # 查看退出原因
-docker logs clawdbot-ubuntu
+docker logs openclaw-ubuntu
 
 # 常見原因：cgroup 版本不相容
 # 解決方式：確認使用了 --cgroupns=host 參數
@@ -697,42 +684,29 @@ docker logs clawdbot-ubuntu
 
 ```bash
 # 檢查是否使用了 /sbin/init 作為入口
-docker inspect clawdbot-ubuntu --format '{{.Config.Cmd}}'
+docker inspect openclaw-ubuntu --format '{{.Config.Cmd}}'
 # 應顯示 [/sbin/init]
 
 # 檢查是否啟用了 --privileged
-docker inspect clawdbot-ubuntu --format '{{.HostConfig.Privileged}}'
+docker inspect openclaw-ubuntu --format '{{.HostConfig.Privileged}}'
 # 應顯示 true
 
 # 如果仍然失敗，嘗試使用 systemd 專用映像檔
-docker stop clawdbot-ubuntu && docker rm clawdbot-ubuntu
+docker stop openclaw-ubuntu && docker rm openclaw-ubuntu
 docker run -d \
-  --name clawdbot-ubuntu \
-  --hostname clawdbot-server \
+  --name openclaw-ubuntu \
+  --hostname openclaw-server \
   --privileged \
   --cgroupns=host \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-  -v clawdbot-home:/home/clawdbot \
-  -v clawdbot-config:/opt/clawdbot-ansible \
+  -v openclaw-home:/home/openclaw \
+  -v openclaw-config:/opt/openclaw-ansible \
   -p 127.0.0.1:3000:3000 \
   -p 127.0.0.1:2222:22 \
   --tmpfs /run \
   --tmpfs /run/lock \
   jrei/systemd-ubuntu:24.04 \
   /sbin/init
-```
-
-### Ansible Playbook 失敗於 Homebrew 安裝
-
-```bash
-# 在容器內手動安裝 Homebrew
-apt install -y build-essential procps curl file git
-useradd -m -s /bin/bash linuxbrew 2>/dev/null || true
-su - clawdbot -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
-
-# 重新執行 Playbook
-cd /opt/clawdbot-ansible
-ansible-playbook playbook.yml -e ansible_become=false
 ```
 
 ### Docker-in-Docker 啟動失敗
@@ -765,14 +739,14 @@ docker system prune -a
 docker system df
 ```
 
-### 容器重啟後 Clawdbot 未自動啟動
+### 容器重啟後 OpenClaw 未自動啟動
 
 ```bash
 # 確認 systemd 服務已啟用
-docker exec clawdbot-ubuntu systemctl enable clawdbot
+docker exec openclaw-ubuntu systemctl enable openclaw
 
 # 確認自動重啟策略
-docker update --restart unless-stopped clawdbot-ubuntu
+docker update --restart unless-stopped openclaw-ubuntu
 ```
 
 ---
@@ -785,10 +759,10 @@ docker update --restart unless-stopped clawdbot-ubuntu
 
 ```yaml
 services:
-  clawdbot:
+  openclaw:
     image: ubuntu:24.04
-    container_name: clawdbot-ubuntu
-    hostname: clawdbot-server
+    container_name: openclaw-ubuntu
+    hostname: openclaw-server
     privileged: true
     cgroup_parent: ""
     command: /sbin/init
@@ -797,16 +771,16 @@ services:
       - "127.0.0.1:2222:22"
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - clawdbot-home:/home/clawdbot
-      - clawdbot-config:/opt/clawdbot-ansible
+      - openclaw-home:/home/openclaw
+      - openclaw-config:/opt/openclaw-ansible
     tmpfs:
       - /run
       - /run/lock
     restart: unless-stopped
 
 volumes:
-  clawdbot-home:
-  clawdbot-config:
+  openclaw-home:
+  openclaw-config:
 ```
 
 管理指令：
@@ -825,7 +799,7 @@ docker compose restart
 docker compose logs -f
 
 # 進入容器
-docker compose exec clawdbot bash
+docker compose exec openclaw bash
 ```
 
 ---
@@ -838,32 +812,33 @@ docker compose exec clawdbot bash
 ╠══════════════════════════════════════════════════════════╣
 ║                                                          ║
 ║  建立容器：                                               ║
-║    docker run -d --name clawdbot-ubuntu --privileged \   ║
+║    docker run -d --name openclaw-ubuntu --privileged \   ║
 ║      --cgroupns=host -v /sys/fs/cgroup:...:rw \          ║
-║      -v clawdbot-home:/home/clawdbot \                   ║
+║      -v openclaw-home:/home/openclaw \                   ║
 ║      -p 127.0.0.1:3000:3000 --tmpfs /run \               ║
 ║      ubuntu:24.04 /sbin/init                             ║
 ║                                                          ║
 ║  進入容器：                                               ║
-║    docker exec -it clawdbot-ubuntu bash                  ║
+║    docker exec -it openclaw-ubuntu bash                  ║
 ║                                                          ║
 ║  執行 Playbook：                                          ║
-║    cd /opt/clawdbot-ansible                              ║
+║    cd /opt/openclaw-ansible                              ║
 ║    ansible-playbook playbook.yml -e ansible_become=false ║
 ║                                                          ║
-║  設定 Clawdbot：                                          ║
-║    sudo su - clawdbot                                    ║
-║    clawdbot onboard --install-daemon                     ║
+║  設定 OpenClaw：                                          ║
+║    sudo su - openclaw                                    ║
+║    nano ~/.openclaw/config.yml                           ║
+║    sudo docker exec -it openclaw openclaw login          ║
 ║                                                          ║
 ║  從 Mac 存取：                                            ║
 ║    curl http://localhost:3000                            ║
 ║                                                          ║
 ║  容器管理：                                               ║
-║    docker start/stop/restart clawdbot-ubuntu             ║
-║    docker logs -f clawdbot-ubuntu                        ║
+║    docker start/stop/restart openclaw-ubuntu             ║
+║    docker logs -f openclaw-ubuntu                        ║
 ║                                                          ║
 ║  備份：                                                   ║
-║    docker run --rm -v clawdbot-home:/data \              ║
+║    docker run --rm -v openclaw-home:/data \              ║
 ║      -v $(pwd):/bk ubuntu:24.04 \                        ║
 ║      tar czf /bk/backup.tar.gz -C /data .                ║
 ║                                                          ║
